@@ -2,7 +2,7 @@
 #include<iostream>
 #include"Simulation.h"
 #include"Helper.h"
-include"mpi.h"
+#include "mpi.h"
 using namespace std;
 
 Simulation::Simulation() {
@@ -64,7 +64,7 @@ double Simulation::findMinSQ( int *i, int *j ) {
     *i = iMin;
     *j = jMin;
 
-    cout << "Closest pair [" << iMin << ", " << jMin << "] " << dSQmin << endl;
+    cout << "Closest pair [" << iMin << ", " << jMin << "] " << dSQmin << " "<<rank << endl;
 
     return dSQmin;
 }
@@ -72,7 +72,7 @@ double Simulation::findMinSQ( int *i, int *j ) {
 void Simulation::remove( int numberOfPairsToRemove ) {  // MPI this part
     int i, j;
     double middleX, middleY, middleZ;
-    for ( int pairs = 0; pairs < numberOfPairsToRemove/size; pairs++ ) {
+    for ( int pairs = rank; pairs < numberOfPairsToRemove; pairs += size ) {
         findMinSQ( &i, &j );
         middleX = Helper::middle( x, i, j );
         middleY = Helper::middle( y, i, j );
@@ -86,11 +86,13 @@ void Simulation::remove( int numberOfPairsToRemove ) {  // MPI this part
 
 void Simulation::calcAvgMinDistance( void ) { 
     double sum = 0.0;
+    avgMinDistance = 0;
     int effectiveParticles = 0;
-    int avgMinDistancePerProc = 0;
+    int placeholderParticles = 0;
     int l;
-    double *avgMinDistanceBuf = new double [size];
-    for ( int i = 0; i < numberOfParticles/size; i++ ) {
+    double *avgMinDistanceBuf = new double[size];
+    int *effectiveParticlesBuf = new int[size];
+    for ( int i = 0; i < numberOfParticles; i++ ) {
         if ( active[ i ] ) {
             sum += sqrt( findMinSQ( i, &l ) );
             effectiveParticles ++;
@@ -99,13 +101,17 @@ void Simulation::calcAvgMinDistance( void ) {
     // Return individual sums
     cout << "Suma " << sum << endl;
 
-
-    avgMinDistancePerProc = sum / effectiveParticles;
     // Gather sum of sums
-    MPI_Gather(&avgMinDistancePerProc,1,MPI_DOUBLE,avgMinDistanceBuf,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
-    if (!rank)
-        for (i=0 ; i<size ; i++)
+    MPI_Gather(&sum,1,MPI_DOUBLE,avgMinDistanceBuf,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
+    MPI_Gather(&effectiveParticles,1,MPI_INT,effectiveParticlesBuf,1,MPI_INT,0,MPI_COMM_WORLD);
+    if (!rank){
+        for (int i=0 ; i<size ; i++) {
             avgMinDistance += avgMinDistanceBuf[i];
+            placeholderParticles += effectiveParticlesBuf[i];
+            cout << "Dodaje " << avgMinDistanceBuf[i] <<" i "<< effectiveParticlesBuf[i]<< " "<< i <<  endl;
+        }
+        avgMinDistance = avgMinDistance/placeholderParticles;
+    }
 }
 
 double Simulation::getAvgMinDistance( void ) {
@@ -113,7 +119,7 @@ double Simulation::getAvgMinDistance( void ) {
 }
 
 void Simulation::shareData( void ) {
-    MPI_Bcast(numberOfParticles,1,MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Bcast(&numberOfParticles,1,MPI_INT,0,MPI_COMM_WORLD);
     MPI_Scatter(x,numberOfParticles/size,MPI_DOUBLE,x,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
     MPI_Scatter(y,numberOfParticles/size,MPI_DOUBLE,y,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
     MPI_Scatter(z,numberOfParticles/size,MPI_DOUBLE,z,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);        
@@ -123,7 +129,8 @@ void Simulation::shareData( void ) {
         this->y = y;
         this->z = z;
         this->numberOfParticles = numberOfParticles/size;
-        active = new bool [ numberOfParticles/size ];
-        for ( int i = 0; i < numberOfParticles/size; i++ )
+        cout << "Set number of particles to " <<numberOfParticles << " in rank " << rank << endl;
+        active = new bool [ numberOfParticles ];
+        for ( int i = 0; i < numberOfParticles; i++ )
             active[ i ] = true;
 }
