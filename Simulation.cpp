@@ -52,7 +52,7 @@ double Simulation::findMinSQ( int *i, int *j ) {
     double dSQ;
     int iMin, jMin;
     int l;
-    for ( int k = 0; k < numberOfParticles; k++ ) {
+    for ( int k = rank; k < numberOfParticles; k += size ) {
         if ( ! active[ k ] ) continue;
         dSQ = findMinSQ( k, &l );
         if ( dSQ < dSQmin ) {
@@ -64,7 +64,7 @@ double Simulation::findMinSQ( int *i, int *j ) {
     *i = iMin;
     *j = jMin;
 
-    cout << "Closest pair [" << iMin << ", " << jMin << "] " << dSQmin << " "<<rank << endl;
+    cout << "Closest pair [" << iMin << ", " << jMin << "] " << dSQmin << endl;
 
     return dSQmin;
 }
@@ -73,7 +73,7 @@ void Simulation::remove( int numberOfPairsToRemove ) {  // MPI this part
     int i, j;
     double middleX, middleY, middleZ;
     for ( int pairs = rank; pairs < numberOfPairsToRemove; pairs += size ) {
-        findMinSQ( &i, &j );
+        findMinSQ( &i, &j ); // This will be mpied too in this version, scattering the data at the start is a bad idea, the vector gets divided and the values get skewed
         middleX = Helper::middle( x, i, j );
         middleY = Helper::middle( y, i, j );
         middleZ = Helper::middle( z, i, j );
@@ -99,7 +99,7 @@ void Simulation::calcAvgMinDistance( void ) {
         }
     }
     // Return individual sums
-    cout << "Suma " << sum << endl;
+
 
     // Gather sum of sums
     MPI_Gather(&sum,1,MPI_DOUBLE,avgMinDistanceBuf,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
@@ -108,7 +108,7 @@ void Simulation::calcAvgMinDistance( void ) {
         for (int i=0 ; i<size ; i++) {
             avgMinDistance += avgMinDistanceBuf[i];
             placeholderParticles += effectiveParticlesBuf[i];
-            cout << "Dodaje " << avgMinDistanceBuf[i] <<" i "<< effectiveParticlesBuf[i]<< " "<< i <<  endl;
+            //cout << "Dodaje " << avgMinDistanceBuf[i] <<" i "<< effectiveParticlesBuf[i]<< " "<< i <<  endl;
         }
         avgMinDistance = avgMinDistance/placeholderParticles;
     }
@@ -120,16 +120,16 @@ double Simulation::getAvgMinDistance( void ) {
 
 void Simulation::shareData( void ) {
     MPI_Bcast(&numberOfParticles,1,MPI_INT,0,MPI_COMM_WORLD);
-    MPI_Scatter(x,numberOfParticles/size,MPI_DOUBLE,x,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
-    MPI_Scatter(y,numberOfParticles/size,MPI_DOUBLE,y,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
-    MPI_Scatter(z,numberOfParticles/size,MPI_DOUBLE,z,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);        
+    MPI_Bcast(x,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
+    MPI_Bcast(y,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
+    MPI_Bcast(z,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);        
 
     // Now all processess should have config
         this->x = x;
         this->y = y;
         this->z = z;
-        this->numberOfParticles = numberOfParticles/size;
-        cout << "Set number of particles to " <<numberOfParticles << " in rank " << rank << endl;
+        this->numberOfParticles = numberOfParticles;
+        //cout << "Set number of particles to " <<numberOfParticles << " in rank " << rank << endl;
         active = new bool [ numberOfParticles ];
         for ( int i = 0; i < numberOfParticles; i++ )
             active[ i ] = true;
