@@ -13,6 +13,7 @@ private:
 	double *x, *y, *z;
 	int numberOfParticles;
 	bool *active;
+	bool first = true;
 	int rank, size;
 	double avgMinDistance;
 	double findMinSQ( int *i, int *j ); // odszukuje parę cząstek, które są najbliżej

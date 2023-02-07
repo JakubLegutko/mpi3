@@ -19,6 +19,7 @@ void Simulation::setParticles( double *x, double *y, double *z, int numberOfPart
     active = new bool [ numberOfParticles ];
     for ( int i = 0; i < numberOfParticles; i++ )
         active[ i ] = true;
+
 }
 
 double Simulation::findMinSQ( int i, int *j ) {
@@ -70,6 +71,10 @@ double Simulation::findMinSQ( int *i, int *j ) {
 }
 
 void Simulation::remove( int numberOfPairsToRemove ) {  // MPI this part
+    if (first){
+        shareData();
+        first = false;
+    }
     int i, j;
     double middleX, middleY, middleZ;
     for ( int pairs = rank; pairs < numberOfPairsToRemove; pairs += size ) {
@@ -82,6 +87,7 @@ void Simulation::remove( int numberOfPairsToRemove ) {  // MPI this part
         z[ i ] = middleZ;
         active[ j ] = false;
     }
+    calcAvgMinDistance();
 }
 
 void Simulation::calcAvgMinDistance( void ) { 
@@ -119,16 +125,18 @@ double Simulation::getAvgMinDistance( void ) {
 }
 
 void Simulation::shareData( void ) {
-    MPI_Bcast(&numberOfParticles,1,MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Bcast(&numberOfParticles,1,MPI_INT,0,MPI_COMM_WORLD);\
+    if (rank){
+        x = new double [numberOfParticles];
+        y = new double [numberOfParticles];
+        z = new double [numberOfParticles];
+    }        
     MPI_Bcast(x,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
     MPI_Bcast(y,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);
     MPI_Bcast(z,numberOfParticles,MPI_DOUBLE,0,MPI_COMM_WORLD);        
 
     // Now all processess should have config
-        this->x = x;
-        this->y = y;
-        this->z = z;
-        this->numberOfParticles = numberOfParticles;
+
         //cout << "Set number of particles to " <<numberOfParticles << " in rank " << rank << endl;
         active = new bool [ numberOfParticles ];
         for ( int i = 0; i < numberOfParticles; i++ )
