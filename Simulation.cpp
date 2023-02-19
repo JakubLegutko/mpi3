@@ -16,9 +16,9 @@ void Simulation::setParticles( double *x, double *y, double *z, int numberOfPart
     this->y = y;
     this->z = z;
     this->numberOfParticles = numberOfParticles;
-    active = new bool [ numberOfParticles ];
-    for ( int i = 0; i < numberOfParticles; i++ )
-        active[ i ] = true;
+    //active = new bool [ numberOfParticles ];
+    //for ( int i = 0; i < numberOfParticles; i++ )
+//        active[ i ] = true;
 
 }
 
@@ -87,29 +87,30 @@ void Simulation::remove( int numberOfPairsToRemove ) {  // MPI this part
         z[ i ] = middleZ;
         active[ j ] = false;
     }
-   if (!rank)
     calcAvgMinDistance();
 }
 
 void Simulation::calcAvgMinDistance( void ) { 
     double sum = 0.0;
+    double sumGlobal = 0.0;
     avgMinDistance = 0;
     int effectiveParticles = 0;
-    int placeholderParticles = 0;
+    int effectiveParticlesGlobal = 0;
     int l;
-    double *avgMinDistanceBuf = new double[size];
-    int *effectiveParticlesBuf = new int[size];
-    for ( int i = 0; i < numberOfParticles; i++ ) {
+    MPI_Bcast( x , numberOfParticles , MPI_DOUBLE , 0 , MPI_COMM_WORLD);
+    MPI_Bcast( y , numberOfParticles , MPI_DOUBLE , 0 , MPI_COMM_WORLD);
+    MPI_Bcast( z , numberOfParticles , MPI_DOUBLE , 0 , MPI_COMM_WORLD);
+    MPI_Bcast( active , numberOfParticles , MPI_C_BOOL , 0 , MPI_COMM_WORLD);
+    for ( int i = rank; i < numberOfParticles; i+=size ) {
         if ( active[ i ] ) {
             sum += sqrt( findMinSQ( i, &l ) );
             effectiveParticles ++;
         }
     }
-   
-
-    if (!rank){
-        avgMinDistance = sum/effectiveParticles;
-    }
+    MPI_Reduce(&sum,&sumGlobal,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+    MPI_Reduce( &effectiveParticles , &effectiveParticlesGlobal , 1 , MPI_INT , MPI_SUM , 0 , MPI_COMM_WORLD);
+    if (rank == 0)
+        avgMinDistance = sumGlobal/effectiveParticlesGlobal;
 
 }
 
